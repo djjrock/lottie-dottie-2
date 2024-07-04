@@ -56,14 +56,14 @@ def edit_shape_colors(shape, prefix):
     if 'it' in shape:
         for i, item in enumerate(shape['it']):
             if item.get('ty') == 'fl':  # Fill
-                st.subheader(f"{prefix} Fill Color")
+                st.write(f"{prefix} Fill Color")
                 current_color = rgb_to_hex(item['c']['k'][:3])
-                new_color = st.color_picker("Choose color", current_color)
+                new_color = st.color_picker("Choose color", current_color, key=f"{prefix}_fill_{i}")
                 item['c']['k'] = hex_to_rgb(new_color) + [item['c']['k'][3]]  # Preserve alpha
             elif item.get('ty') == 'st':  # Stroke
-                st.subheader(f"{prefix} Stroke Color")
+                st.write(f"{prefix} Stroke Color")
                 current_color = rgb_to_hex(item['c']['k'][:3])
-                new_color = st.color_picker("Choose color", current_color)
+                new_color = st.color_picker("Choose color", current_color, key=f"{prefix}_stroke_{i}")
                 item['c']['k'] = hex_to_rgb(new_color) + [item['c']['k'][3]]  # Preserve alpha
             elif item.get('ty') == 'gr':  # Group
                 edit_shape_colors(item, f"{prefix} Group {i}")
@@ -156,13 +156,13 @@ def main():
 
                 if 's' in layer['ks']:  # Scale
                     scale_x, scale_y = layer['ks']['s'].get('k', [100, 100])[:2]
-                    new_scale_x = st.number_input("X Scale (%)", value=float(scale_x))
-                    new_scale_y = st.number_input("Y Scale (%)", value=float(scale_y))
+                    new_scale_x = st.number_input("X Scale (%)", value=float(scale_x) if isinstance(scale_x, (int, float)) else 100)
+                    new_scale_y = st.number_input("Y Scale (%)", value=float(scale_y) if isinstance(scale_y, (int, float)) else 100)
                     layer['ks']['s']['k'] = [new_scale_x, new_scale_y] + layer['ks']['s'].get('k', [100])[2:]
 
                 if 'r' in layer['ks']:  # Rotation
                     rotation = layer['ks']['r'].get('k', 0)
-                    new_rotation = st.number_input("Rotation (degrees)", value=float(rotation))
+                    new_rotation = st.number_input("Rotation (degrees)", value=float(rotation) if isinstance(rotation, (int, float)) else 0)
                     layer['ks']['r']['k'] = new_rotation
 
             # Color editing for shape layers
@@ -170,11 +170,11 @@ def main():
                 st.subheader("Shape Properties")
                 for i, shape in enumerate(layer.get('shapes', [])):
                     st.markdown(f"**Shape {i+1}**")
-                    edit_shape_colors(shape, f"Layer {selected_layer} Shape {i}")
+                    edit_shape_colors(shape, f"Layer_{selected_layer}_Shape_{i}")
 
         # Animation properties
         st.subheader("Animation Properties")
-        lottie_json['fr'] = st.number_input("Frame Rate", value=lottie_json.get('fr', 60))
+        lottie_json['fr'] = st.number_input("Frame Rate", value=float(lottie_json.get('fr', 60)))
 
     # Download buttons
     col1, col2 = st.columns(2)
