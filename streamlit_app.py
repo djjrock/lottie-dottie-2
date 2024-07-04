@@ -5,6 +5,7 @@ from PIL import Image
 import io
 import base64
 
+# Ensure streamlit-lottie is installed
 try:
     from streamlit_lottie import st_lottie
 except ImportError:
@@ -15,6 +16,25 @@ except ImportError:
     from streamlit_lottie import st_lottie
 
 st.set_page_config(page_title="Advanced Lottie Animation Editor", layout="wide")
+
+# Set dark theme
+st.markdown("""
+<style>
+    .reportview-container {
+        background: #1E1E1E;
+        color: white;
+    }
+    .sidebar .sidebar-content {
+        background: #2E2E2E;
+    }
+    .Widget>label {
+        color: white;
+    }
+    .stTextInput>div>div>input {
+        color: white;
+    }
+</style>
+""", unsafe_allow_html=True)
 
 def load_lottieurl(url: str):
     try:
@@ -45,29 +65,38 @@ def safe_get(obj, key, default=0):
     except (ValueError, TypeError):
         return float(default)
 
+def find_colors(item, colors, path):
+    if isinstance(item, dict):
+        if 'ty' in item:
+            if item['ty'] == 'fl':  # Fill
+                colors.append((path + ['Fill'], item.get('c', {}).get('k', [0, 0, 0, 1])))
+            elif item['ty'] == 'st':  # Stroke
+                colors.append((path + ['Stroke'], item.get('c', {}).get('k', [0, 0, 0, 1])))
+        for key, value in item.items():
+            find_colors(value, colors, path + [key])
+    elif isinstance(item, list):
+        for i, value in enumerate(item):
+            find_colors(value, colors, path + [str(i)])
+
 def edit_shape_colors(shape, prefix):
-    if isinstance(shape, dict) and 'it' in shape:
-        for i, item in enumerate(shape['it']):
-            if isinstance(item, dict):
-                if item.get('ty') == 'fl':  # Fill
-                    st.write(f"{prefix} Fill Color")
-                    current_color = rgb_to_hex(item.get('c', {}).get('k', [0, 0, 0])[:3])
-                    new_color = st.color_picker("Choose color", current_color, key=f"{prefix}_fill_{i}")
-                    if 'c' not in item:
-                        item['c'] = {}
-                    item['c']['k'] = hex_to_rgb(new_color) + [1]  # Add alpha channel
-                elif item.get('ty') == 'st':  # Stroke
-                    st.write(f"{prefix} Stroke Color")
-                    current_color = rgb_to_hex(item.get('c', {}).get('k', [0, 0, 0])[:3])
-                    new_color = st.color_picker("Choose color", current_color, key=f"{prefix}_stroke_{i}")
-                    if 'c' not in item:
-                        item['c'] = {}
-                    item['c']['k'] = hex_to_rgb(new_color) + [1]  # Add alpha channel
-                elif item.get('ty') == 'gr':  # Group
-                    edit_shape_colors(item, f"{prefix} Group {i}")
+    colors = []
+    find_colors(shape, colors, [prefix])
+    
+    for i, (path, color) in enumerate(colors):
+        color_name = ' > '.join(path)
+        st.write(f"**{color_name}**")
+        current_color = rgb_to_hex(color[:3])
+        new_color = st.color_picker("Choose color", current_color, key=f"{prefix}_color_{i}")
+        new_rgb = hex_to_rgb(new_color) + [color[3]]  # Preserve alpha
+        
+        # Update the color in the original structure
+        target = shape
+        for p in path[1:-1]:
+            target = target[p]
+        target['c']['k'] = new_rgb
 
 def main():
-    st.title("Advanced Lottie Animation Editor")
+    st.title("Advanced Lottie Animation Editor v1.1")
     st.markdown("""
     This advanced Lottie editor allows you to:
     - Load animations from file or URL
@@ -164,13 +193,8 @@ def main():
                         else:
                             ks['r'] = new_rotation
 
-            if isinstance(layer, dict) and layer.get('ty') == 4:  # Shape layer
-                st.subheader("Shape Properties")
-                shapes = layer.get('shapes', [])
-                if isinstance(shapes, list):
-                    for i, shape in enumerate(shapes):
-                        st.markdown(f"**Shape {i+1}**")
-                        edit_shape_colors(shape, f"Layer_{selected_layer}_Shape_{i}")
+            st.subheader("Color Properties")
+            edit_shape_colors(layer, f"Layer_{selected_layer}")
 
         st.subheader("Animation Properties")
         lottie_json['fr'] = st.number_input("Frame Rate", value=safe_get(lottie_json, 'fr', 60))
