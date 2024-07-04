@@ -96,7 +96,7 @@ def edit_shape_colors(shape, prefix):
         target['c']['k'] = new_rgb
 
 def main():
-    st.title("Advanced Lottie Animation Editor v1.1")
+    st.title("Advanced Lottie Animation Editor")
     st.markdown("""
     This advanced Lottie editor allows you to:
     - Load animations from file or URL
