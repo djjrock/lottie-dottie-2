@@ -68,10 +68,10 @@ def safe_get(obj, key, default=0):
 def find_colors(item, colors, path):
     if isinstance(item, dict):
         if 'ty' in item:
-            if item['ty'] == 'fl':  # Fill
-                colors.append((path + ['Fill'], item.get('c', {}).get('k', [0, 0, 0, 1])))
-            elif item['ty'] == 'st':  # Stroke
-                colors.append((path + ['Stroke'], item.get('c', {}).get('k', [0, 0, 0, 1])))
+            if item['ty'] == 'fl' and 'c' in item and 'k' in item['c']:  # Fill
+                colors.append((path + ['Fill'], item['c']['k']))
+            elif item['ty'] == 'st' and 'c' in item and 'k' in item['c']:  # Stroke
+                colors.append((path + ['Stroke'], item['c']['k']))
         for key, value in item.items():
             find_colors(value, colors, path + [key])
     elif isinstance(item, list):
@@ -90,10 +90,23 @@ def edit_shape_colors(shape, prefix):
         new_rgb = hex_to_rgb(new_color) + [color[3]]  # Preserve alpha
         
         # Update the color in the original structure
-        target = shape
-        for p in path[1:-1]:
-            target = target[p]
-        target['c']['k'] = new_rgb
+        try:
+            target = shape
+            for p in path[1:-1]:
+                if isinstance(target, dict) and p in target:
+                    target = target[p]
+                elif isinstance(target, list) and p.isdigit() and int(p) < len(target):
+                    target = target[int(p)]
+                else:
+                    st.warning(f"Could not update color for {color_name}. Path not found in Lottie structure.")
+                    break
+            else:
+                if isinstance(target, dict) and 'c' in target and 'k' in target['c']:
+                    target['c']['k'] = new_rgb
+                else:
+                    st.warning(f"Could not update color for {color_name}. Unexpected Lottie structure.")
+        except (KeyError, IndexError, TypeError) as e:
+            st.warning(f"Error updating color for {color_name}: {str(e)}")
 
 def main():
     st.title("Advanced Lottie Animation Editor")
@@ -194,7 +207,10 @@ def main():
                             ks['r'] = new_rotation
 
             st.subheader("Color Properties")
-            edit_shape_colors(layer, f"Layer_{selected_layer}")
+            if isinstance(layer, dict):
+                edit_shape_colors(layer, f"Layer_{selected_layer}")
+            else:
+                st.warning("This layer does not contain editable color properties.")
 
         st.subheader("Animation Properties")
         lottie_json['fr'] = st.number_input("Frame Rate", value=safe_get(lottie_json, 'fr', 60))
