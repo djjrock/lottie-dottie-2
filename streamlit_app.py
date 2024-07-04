@@ -4,6 +4,7 @@ import requests
 from PIL import Image
 import io
 import base64
+import copy
 
 # Ensure streamlit-lottie is installed
 try:
@@ -36,6 +37,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+@st.cache_data
 def load_lottieurl(url: str):
     try:
         r = requests.get(url)
@@ -82,6 +84,7 @@ def edit_shape_colors(shape, prefix):
     colors = []
     find_colors(shape, colors, [prefix])
     
+    color_changes = {}
     for i, (path, color) in enumerate(colors):
         color_name = ' > '.join(path)
         st.write(f"**{color_name}**")
@@ -89,24 +92,27 @@ def edit_shape_colors(shape, prefix):
         new_color = st.color_picker("Choose color", current_color, key=f"{prefix}_color_{i}")
         new_rgb = hex_to_rgb(new_color) + [color[3]]  # Preserve alpha
         
-        # Update the color in the original structure
-        try:
-            target = shape
-            for p in path[1:-1]:
-                if isinstance(target, dict) and p in target:
-                    target = target[p]
-                elif isinstance(target, list) and p.isdigit() and int(p) < len(target):
-                    target = target[int(p)]
-                else:
-                    st.warning(f"Could not update color for {color_name}. Path not found in Lottie structure.")
-                    break
+        if new_rgb[:3] != color[:3]:
+            color_changes[tuple(path)] = new_rgb
+
+    return color_changes
+
+def apply_color_changes(shape, color_changes):
+    for path, new_rgb in color_changes.items():
+        target = shape
+        for p in path[1:-1]:
+            if isinstance(target, dict) and p in target:
+                target = target[p]
+            elif isinstance(target, list) and p.isdigit() and int(p) < len(target):
+                target = target[int(p)]
             else:
-                if isinstance(target, dict) and 'c' in target and 'k' in target['c']:
-                    target['c']['k'] = new_rgb
-                else:
-                    st.warning(f"Could not update color for {color_name}. Unexpected Lottie structure.")
-        except (KeyError, IndexError, TypeError) as e:
-            st.warning(f"Error updating color for {color_name}: {str(e)}")
+                st.warning(f"Could not update color for {' > '.join(path)}. Path not found in Lottie structure.")
+                break
+        else:
+            if isinstance(target, dict) and 'c' in target and 'k' in target['c']:
+                target['c']['k'] = new_rgb
+            else:
+                st.warning(f"Could not update color for {' > '.join(path)}. Unexpected Lottie structure.")
 
 def main():
     st.title("Advanced Lottie Animation Editor")
@@ -120,6 +126,9 @@ def main():
     - Export as JSON or GIF
     """)
 
+    if 'lottie_json' not in st.session_state:
+        st.session_state.lottie_json = None
+
     with st.sidebar:
         st.header("Load Animation")
         uploaded_file = st.file_uploader("Choose a Lottie JSON file", type="json")
@@ -127,20 +136,20 @@ def main():
 
         if uploaded_file is not None:
             try:
-                lottie_json = json.load(uploaded_file)
+                st.session_state.lottie_json = json.load(uploaded_file)
             except json.JSONDecodeError:
                 st.error("Invalid JSON file. Please upload a valid Lottie JSON.")
-                return
         elif lottie_url:
-            lottie_json = load_lottieurl(lottie_url)
-            if lottie_json is None:
-                return
-        else:
+            st.session_state.lottie_json = load_lottieurl(lottie_url)
+        elif st.session_state.lottie_json is None:
             default_url = "https://assets5.lottiefiles.com/packages/lf20_V9t630.json"
-            lottie_json = load_lottieurl(default_url)
-            if lottie_json is None:
-                st.error(f"Failed to load default animation")
-                return
+            st.session_state.lottie_json = load_lottieurl(default_url)
+
+        if st.session_state.lottie_json is None:
+            st.error("Failed to load animation")
+            return
+
+    lottie_json = copy.deepcopy(st.session_state.lottie_json)
 
     col1, col2 = st.columns([2, 1])
 
@@ -208,7 +217,9 @@ def main():
 
             st.subheader("Color Properties")
             if isinstance(layer, dict):
-                edit_shape_colors(layer, f"Layer_{selected_layer}")
+                color_changes = edit_shape_colors(layer, f"Layer_{selected_layer}")
+                if color_changes:
+                    apply_color_changes(layer, color_changes)
             else:
                 st.warning("This layer does not contain editable color properties.")
 
@@ -237,6 +248,9 @@ def main():
             img_str = base64.b64encode(buffered.getvalue()).decode()
             href = f'<a href="data:image/gif;base64,{img_str}" download="lottie_animation.gif">Download GIF</a>'
             st.markdown(href, unsafe_allow_html=True)
+
+    # Update the session state with the modified Lottie JSON
+    st.session_state.lottie_json = lottie_json
 
 if __name__ == "__main__":
     main()
