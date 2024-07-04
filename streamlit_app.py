@@ -15,7 +15,7 @@ except ImportError:
     subprocess.check_call([sys.executable, "-m", "pip", "install", "streamlit-lottie"])
     from streamlit_lottie import st_lottie
 
-st.set_page_config(page_title="Advanced Lottie Editor", layout="wide")
+st.set_page_config(page_title="Advanced Lottie Animation Editor", layout="wide")
 
 # Set dark theme
 st.markdown("""
@@ -39,48 +39,32 @@ st.markdown("""
 def load_lottieurl(url: str):
     try:
         r = requests.get(url)
-        r.raise_for_status()  # Raises a HTTPError if the status is 4xx, 5xx
+        r.raise_for_status()
         return r.json()
-    except requests.exceptions.HTTPError as errh:
-        st.error(f"HTTP Error: {errh}")
-    except requests.exceptions.ConnectionError as errc:
-        st.error(f"Error Connecting: {errc}")
-    except requests.exceptions.Timeout as errt:
-        st.error(f"Timeout Error: {errt}")
-    except requests.exceptions.RequestException as err:
-        st.error(f"Something went wrong: {err}")
-    except json.JSONDecodeError:
-        st.error(f"Error decoding JSON from {url}. Please make sure the URL points directly to a valid Lottie JSON file.")
+    except Exception as e:
+        st.error(f"Error loading Lottie from URL: {e}")
     return None
+
+def rgb_to_hex(rgb):
+    return '#{:02x}{:02x}{:02x}'.format(int(rgb[0]*255), int(rgb[1]*255), int(rgb[2]*255))
 
 def hex_to_rgb(hex_color):
     hex_color = hex_color.lstrip('#')
     return [int(hex_color[i:i+2], 16)/255 for i in (0, 2, 4)]
 
-def rgb_to_hex(rgb):
-    return '#{:02x}{:02x}{:02x}'.format(int(rgb[0]*255), int(rgb[1]*255), int(rgb[2]*255))
-
-def color_picker_with_hex(label, current_color):
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        color = st.color_picker(label, current_color)
-    with col2:
-        color_hex = st.text_input("", color.upper())
-        if color_hex.startswith("#") and len(color_hex) == 7:
-            color = color_hex
-    return color
-
 def edit_shape_colors(shape, prefix):
     if 'it' in shape:
         for i, item in enumerate(shape['it']):
             if item.get('ty') == 'fl':  # Fill
+                st.subheader(f"{prefix} Fill Color")
                 current_color = rgb_to_hex(item['c']['k'][:3])
-                new_color = color_picker_with_hex(f"{prefix} Fill Color", current_color)
-                item['c']['k'] = hex_to_rgb(new_color) + [1]  # Add alpha channel
+                new_color = st.color_picker("Choose color", current_color)
+                item['c']['k'] = hex_to_rgb(new_color) + [item['c']['k'][3]]  # Preserve alpha
             elif item.get('ty') == 'st':  # Stroke
+                st.subheader(f"{prefix} Stroke Color")
                 current_color = rgb_to_hex(item['c']['k'][:3])
-                new_color = color_picker_with_hex(f"{prefix} Stroke Color", current_color)
-                item['c']['k'] = hex_to_rgb(new_color) + [1]  # Add alpha channel
+                new_color = st.color_picker("Choose color", current_color)
+                item['c']['k'] = hex_to_rgb(new_color) + [item['c']['k'][3]]  # Preserve alpha
             elif item.get('ty') == 'gr':  # Group
                 edit_shape_colors(item, f"{prefix} Group {i}")
 
@@ -111,14 +95,13 @@ def main():
         elif lottie_url:
             lottie_json = load_lottieurl(lottie_url)
             if lottie_json is None:
-                st.error("Failed to load Lottie animation from URL. Please check the URL and try again.")
                 return
         else:
             # Load a default animation if no file or URL is provided
             default_url = "https://assets5.lottiefiles.com/packages/lf20_V9t630.json"
             lottie_json = load_lottieurl(default_url)
             if lottie_json is None:
-                st.error(f"Failed to load default animation from {default_url}")
+                st.error(f"Failed to load default animation")
                 return
 
     # Main content area
@@ -173,13 +156,13 @@ def main():
 
                 if 's' in layer['ks']:  # Scale
                     scale_x, scale_y = layer['ks']['s'].get('k', [100, 100])[:2]
-                    new_scale_x = st.number_input("X Scale (%)", value=float(scale_x) if isinstance(scale_x, (int, float)) else 100)
-                    new_scale_y = st.number_input("Y Scale (%)", value=float(scale_y) if isinstance(scale_y, (int, float)) else 100)
+                    new_scale_x = st.number_input("X Scale (%)", value=float(scale_x))
+                    new_scale_y = st.number_input("Y Scale (%)", value=float(scale_y))
                     layer['ks']['s']['k'] = [new_scale_x, new_scale_y] + layer['ks']['s'].get('k', [100])[2:]
 
                 if 'r' in layer['ks']:  # Rotation
                     rotation = layer['ks']['r'].get('k', 0)
-                    new_rotation = st.number_input("Rotation (degrees)", value=float(rotation) if isinstance(rotation, (int, float)) else 0)
+                    new_rotation = st.number_input("Rotation (degrees)", value=float(rotation))
                     layer['ks']['r']['k'] = new_rotation
 
             # Color editing for shape layers
