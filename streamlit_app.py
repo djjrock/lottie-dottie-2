@@ -68,6 +68,12 @@ def edit_shape_colors(shape, prefix):
             elif item.get('ty') == 'gr':  # Group
                 edit_shape_colors(item, f"{prefix} Group {i}")
 
+def safe_get(dict_obj, key, default=0):
+    try:
+        return float(dict_obj.get(key, default))
+    except (ValueError, TypeError):
+        return float(default)
+
 def main():
     st.title("Advanced Lottie Animation Editor")
     st.markdown("""
@@ -117,8 +123,8 @@ def main():
 
         # Trim animation
         st.subheader("Trim Animation")
-        total_frames = lottie_json['op'] - lottie_json['ip']
-        trim_start, trim_end = st.slider("Trim Frames", 0, total_frames, (0, total_frames), 1)
+        total_frames = max(1, safe_get(lottie_json, 'op', 60) - safe_get(lottie_json, 'ip', 0))
+        trim_start, trim_end = st.slider("Trim Frames", 0, int(total_frames), (0, int(total_frames)), 1)
         lottie_json['ip'] = trim_start
         lottie_json['op'] = trim_end
 
@@ -150,19 +156,19 @@ def main():
                 st.subheader("Transform Properties")
                 if 'p' in layer['ks']:  # Position
                     pos_x, pos_y = layer['ks']['p'].get('k', [0, 0])[:2]
-                    new_pos_x = st.number_input("X Position", value=float(pos_x))
-                    new_pos_y = st.number_input("Y Position", value=float(pos_y))
+                    new_pos_x = st.number_input("X Position", value=safe_get(pos_x))
+                    new_pos_y = st.number_input("Y Position", value=safe_get(pos_y))
                     layer['ks']['p']['k'] = [new_pos_x, new_pos_y] + layer['ks']['p'].get('k', [0])[2:]
 
                 if 's' in layer['ks']:  # Scale
                     scale_x, scale_y = layer['ks']['s'].get('k', [100, 100])[:2]
-                    new_scale_x = st.number_input("X Scale (%)", value=float(scale_x) if isinstance(scale_x, (int, float)) else 100)
-                    new_scale_y = st.number_input("Y Scale (%)", value=float(scale_y) if isinstance(scale_y, (int, float)) else 100)
+                    new_scale_x = st.number_input("X Scale (%)", value=safe_get(scale_x, 100))
+                    new_scale_y = st.number_input("Y Scale (%)", value=safe_get(scale_y, 100))
                     layer['ks']['s']['k'] = [new_scale_x, new_scale_y] + layer['ks']['s'].get('k', [100])[2:]
 
                 if 'r' in layer['ks']:  # Rotation
                     rotation = layer['ks']['r'].get('k', 0)
-                    new_rotation = st.number_input("Rotation (degrees)", value=float(rotation) if isinstance(rotation, (int, float)) else 0)
+                    new_rotation = st.number_input("Rotation (degrees)", value=safe_get(rotation))
                     layer['ks']['r']['k'] = new_rotation
 
             # Color editing for shape layers
@@ -174,7 +180,7 @@ def main():
 
         # Animation properties
         st.subheader("Animation Properties")
-        lottie_json['fr'] = st.number_input("Frame Rate", value=float(lottie_json.get('fr', 60)))
+        lottie_json['fr'] = st.number_input("Frame Rate", value=safe_get(lottie_json, 'fr', 60))
 
     # Download buttons
     col1, col2 = st.columns(2)
@@ -192,7 +198,7 @@ def main():
         st.subheader("Export as GIF")
         gif_frames = st.number_input("Number of frames for GIF", min_value=10, max_value=100, value=30)
         if st.button("Generate GIF"):
-            gif_data = lottie_container.to_gif(duration=gif_frames/lottie_json['fr'])
+            gif_data = lottie_container.to_gif(duration=gif_frames/safe_get(lottie_json, 'fr', 60))
             st.image(gif_data, caption="Generated GIF")
             
             # Provide download link for GIF
