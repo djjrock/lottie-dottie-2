@@ -60,16 +60,26 @@ def hex_to_rgb(hex_color):
 def rgb_to_hex(rgb):
     return '#{:02x}{:02x}{:02x}'.format(int(rgb[0]*255), int(rgb[1]*255), int(rgb[2]*255))
 
+def color_picker_with_hex(label, current_color):
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        color = st.color_picker(label, current_color)
+    with col2:
+        color_hex = st.text_input("", color.upper())
+        if color_hex.startswith("#") and len(color_hex) == 7:
+            color = color_hex
+    return color
+
 def edit_shape_colors(shape, prefix):
     if 'it' in shape:
         for i, item in enumerate(shape['it']):
             if item.get('ty') == 'fl':  # Fill
                 current_color = rgb_to_hex(item['c']['k'][:3])
-                new_color = st.color_picker(f"{prefix} Fill Color", current_color)
+                new_color = color_picker_with_hex(f"{prefix} Fill Color", current_color)
                 item['c']['k'] = hex_to_rgb(new_color) + [1]  # Add alpha channel
             elif item.get('ty') == 'st':  # Stroke
                 current_color = rgb_to_hex(item['c']['k'][:3])
-                new_color = st.color_picker(f"{prefix} Stroke Color", current_color)
+                new_color = color_picker_with_hex(f"{prefix} Stroke Color", current_color)
                 item['c']['k'] = hex_to_rgb(new_color) + [1]  # Add alpha channel
             elif item.get('ty') == 'gr':  # Group
                 edit_shape_colors(item, f"{prefix} Group {i}")
@@ -163,13 +173,13 @@ def main():
 
                 if 's' in layer['ks']:  # Scale
                     scale_x, scale_y = layer['ks']['s'].get('k', [100, 100])[:2]
-                    new_scale_x = st.number_input("X Scale (%)", value=float(scale_x))
-                    new_scale_y = st.number_input("Y Scale (%)", value=float(scale_y))
+                    new_scale_x = st.number_input("X Scale (%)", value=float(scale_x) if isinstance(scale_x, (int, float)) else 100)
+                    new_scale_y = st.number_input("Y Scale (%)", value=float(scale_y) if isinstance(scale_y, (int, float)) else 100)
                     layer['ks']['s']['k'] = [new_scale_x, new_scale_y] + layer['ks']['s'].get('k', [100])[2:]
 
                 if 'r' in layer['ks']:  # Rotation
                     rotation = layer['ks']['r'].get('k', 0)
-                    new_rotation = st.number_input("Rotation (degrees)", value=float(rotation))
+                    new_rotation = st.number_input("Rotation (degrees)", value=float(rotation) if isinstance(rotation, (int, float)) else 0)
                     layer['ks']['r']['k'] = new_rotation
 
             # Color editing for shape layers
