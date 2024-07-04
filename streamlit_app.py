@@ -37,42 +37,42 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 def load_lottieurl(url: str):
-    r = requests.get(url)
-    if r.status_code != 200:
-        return None
-    return r.json()
+    try:
+        r = requests.get(url)
+        r.raise_for_status()  # Raises a HTTPError if the status is 4xx, 5xx
+        return r.json()
+    except requests.exceptions.HTTPError as errh:
+        st.error(f"HTTP Error: {errh}")
+    except requests.exceptions.ConnectionError as errc:
+        st.error(f"Error Connecting: {errc}")
+    except requests.exceptions.Timeout as errt:
+        st.error(f"Timeout Error: {errt}")
+    except requests.exceptions.RequestException as err:
+        st.error(f"Something went wrong: {err}")
+    except json.JSONDecodeError:
+        st.error(f"Error decoding JSON from {url}. Please make sure the URL points directly to a valid Lottie JSON file.")
+    return None
 
 def hex_to_rgb(hex_color):
     hex_color = hex_color.lstrip('#')
-    return tuple(int(hex_color[i:i+2], 16)/255 for i in (0, 2, 4))
+    return [int(hex_color[i:i+2], 16)/255 for i in (0, 2, 4)]
 
-def color_picker_with_palette(key, default_color="#FFFFFF"):
-    color = st.color_picker("Select Color", default_color, key=f"{key}_picker")
-    
-    st.markdown("Quick Palette")
-    palette = ["#FF0000", "#00FF00", "#0000FF", "#FFFF00", "#FF00FF", "#00FFFF"]
-    cols = st.columns(6)
-    for i, pal_color in enumerate(palette):
-        if cols[i].button("", key=f"{key}_pal_{i}", help=pal_color,
-                              style=f"background-color: {pal_color}; width: 100%; height: 20px;"):
-            color = pal_color
-    
-    hex_input = st.text_input("Hex Code", color.upper(), key=f"{key}_hex")
-    if hex_input.startswith("#") and len(hex_input) == 7:
-        color = hex_input
-    
-    st.markdown(f"Selected Color: <span style='background-color: {color}; padding: 0 10px;'>{color}</span>", unsafe_allow_html=True)
-    return color
+def rgb_to_hex(rgb):
+    return '#{:02x}{:02x}{:02x}'.format(int(rgb[0]*255), int(rgb[1]*255), int(rgb[2]*255))
 
 def edit_shape_colors(shape, prefix):
     if 'it' in shape:
         for i, item in enumerate(shape['it']):
             if item.get('ty') == 'fl':  # Fill
-                item['c']['k'] = hex_to_rgb(color_picker_with_palette(f"{prefix}_fill_{i}", '#' + ''.join([f"{int(x*255):02x}" for x in item['c']['k'][:3]])))
+                current_color = rgb_to_hex(item['c']['k'][:3])
+                new_color = st.color_picker(f"{prefix} Fill Color", current_color)
+                item['c']['k'] = hex_to_rgb(new_color) + [1]  # Add alpha channel
             elif item.get('ty') == 'st':  # Stroke
-                item['c']['k'] = hex_to_rgb(color_picker_with_palette(f"{prefix}_stroke_{i}", '#' + ''.join([f"{int(x*255):02x}" for x in item['c']['k'][:3]])))
+                current_color = rgb_to_hex(item['c']['k'][:3])
+                new_color = st.color_picker(f"{prefix} Stroke Color", current_color)
+                item['c']['k'] = hex_to_rgb(new_color) + [1]  # Add alpha channel
             elif item.get('ty') == 'gr':  # Group
-                edit_shape_colors(item, f"{prefix}_group_{i}")
+                edit_shape_colors(item, f"{prefix} Group {i}")
 
 def main():
     st.title("Advanced Lottie Animation Editor")
@@ -101,10 +101,15 @@ def main():
         elif lottie_url:
             lottie_json = load_lottieurl(lottie_url)
             if lottie_json is None:
-                st.error("Couldn't load Lottie animation from URL. Please check the URL and try again.")
+                st.error("Failed to load Lottie animation from URL. Please check the URL and try again.")
                 return
         else:
-            lottie_json = load_lottieurl("https://assets5.lottiefiles.com/packages/lf20_V9t630.json")
+            # Load a default animation if no file or URL is provided
+            default_url = "https://assets5.lottiefiles.com/packages/lf20_V9t630.json"
+            lottie_json = load_lottieurl(default_url)
+            if lottie_json is None:
+                st.error(f"Failed to load default animation from {default_url}")
+                return
 
     # Main content area
     col1, col2 = st.columns([2, 1])
@@ -172,7 +177,7 @@ def main():
                 st.subheader("Shape Properties")
                 for i, shape in enumerate(layer.get('shapes', [])):
                     st.markdown(f"**Shape {i+1}**")
-                    edit_shape_colors(shape, f"layer_{selected_layer}_shape_{i}")
+                    edit_shape_colors(shape, f"Layer {selected_layer} Shape {i}")
 
         # Animation properties
         st.subheader("Animation Properties")
